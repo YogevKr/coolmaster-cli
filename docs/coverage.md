@@ -4,6 +4,7 @@
 
 | Area | Command | Status |
 | --- | --- | --- |
+| Health check | `coolmaster-cli doctor` | Implemented |
 | CoolMaster ASCII raw | `printf 'ls\r\n' \| nc "$COOLMASTER_HOST" 10102` | Confirmed |
 | CoolMaster firmware/settings | `coolmaster-cli coolmaster send --cmd set` | Confirmed |
 | Unit status | `ls`, `ls2`, `stat2`, `stat3`, `stat4` | Confirmed |

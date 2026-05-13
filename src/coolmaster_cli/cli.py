@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -10,7 +11,15 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .capture import capture_serial
-from .coolmaster import DEFAULT_ASCII_PORT, CoolMasterClient, UnitStatus, VirtualAddress, parse_ls_response
+from .coolmaster import (
+    DEFAULT_ASCII_PORT,
+    CoolMasterClient,
+    UnitStatus,
+    VirtualAddress,
+    parse_line_response,
+    parse_ls_response,
+    parse_va_response,
+)
 from .modbus import (
     FAN_SPEEDS,
     OPERATION_MODES,
@@ -53,8 +62,20 @@ TEMPERATURE_LIMIT_FIELDS = {"temperature_limits", "cool_temperature_limits", "he
 
 
 def main(argv: list[str] | None = None) -> int:
+    _load_dotenv()
     parser = argparse.ArgumentParser(prog="coolmaster-cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    doctor_parser = subparsers.add_parser("doctor", help="run read-only CoolMaster health checks")
+    doctor_parser.add_argument("--host", default=os.environ.get("COOLMASTER_HOST"))
+    doctor_parser.add_argument("--ascii-port", type=int, default=_env_int("COOLMASTER_ASCII_PORT", DEFAULT_ASCII_PORT))
+    doctor_parser.add_argument("--modbus-port", type=int, default=_env_int("COOLMASTER_MODBUS_PORT", 502))
+    doctor_parser.add_argument("--unit-id", type=int, default=_env_int("COOLMASTER_MODBUS_UNIT_ID", 1))
+    doctor_parser.add_argument("--timeout", type=float, default=_env_float("COOLMASTER_TIMEOUT", 5.0))
+    doctor_parser.add_argument("--deep", action="store_true", help="read every mapped indoor Modbus block")
+    doctor_parser.add_argument("--json", action="store_true", help="print JSON instead of text")
+    doctor_parser.add_argument("--out", type=Path, default=None, help="write the JSON report")
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     capture_parser = subparsers.add_parser("capture", help="capture raw traffic")
     capture_subparsers = capture_parser.add_subparsers(dest="capture_command", required=True)
@@ -261,6 +282,29 @@ def cmd_summarize(args: argparse.Namespace) -> int:
         print("\nwarnings")
         _print_counter(warnings)
     return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    if not args.host:
+        print("Missing --host. Set COOLMASTER_HOST in .env or pass --host.", file=sys.stderr)
+        return 2
+
+    report = _run_doctor(
+        host=args.host,
+        ascii_port=args.ascii_port,
+        modbus_port=args.modbus_port,
+        unit_id=args.unit_id,
+        timeout=args.timeout,
+        deep=args.deep,
+    )
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        _print_doctor_report(report)
+    return 2 if report["summary"]["status"] == "fail" else 0
 
 
 def cmd_coolmaster_probe(args: argparse.Namespace) -> int:
@@ -595,6 +639,250 @@ def _diff_dict(before: object, after: object) -> dict[str, dict[str, object]]:
     return diff
 
 
+def _run_doctor(
+    *,
+    host: str,
+    ascii_port: int,
+    modbus_port: int,
+    unit_id: int,
+    timeout: float,
+    deep: bool,
+) -> dict[str, object]:
+    client = CoolMasterClient(host, ascii_port, timeout=timeout)
+    commands = {command: _command_record(client, command) for command in ("set", "ls2", "line", "modbus", "va")}
+    checks: list[dict[str, object]] = []
+
+    _add_check(
+        checks,
+        "pass" if commands["set"].get("ok") else "fail",
+        "ascii_server",
+        f"ASCII server answered on {host}:{ascii_port}"
+        if commands["set"].get("ok")
+        else f"ASCII server did not answer on {host}:{ascii_port}",
+        _record_error(commands["set"]),
+    )
+
+    settings = _parse_key_values(commands["set"].get("response", ""))
+    modbus_settings = _parse_key_values(commands["modbus"].get("response", ""))
+    units = parse_ls_response(_record_response(commands["ls2"]))
+    lines = parse_line_response(_record_response(commands["line"]))
+    addresses = parse_va_response(_record_response(commands["va"]))
+
+    unit_failures = [asdict(unit) for unit in units if unit.failure != "OK"]
+    filter_flags = [unit.uid for unit in units if unit.filter_sign == "#"]
+    if not units:
+        _add_check(checks, "fail", "inventory", "No indoor units returned by ls2")
+    elif unit_failures:
+        _add_check(checks, "fail", "inventory", f"{len(unit_failures)} indoor unit(s) report failure", unit_failures)
+    elif filter_flags:
+        _add_check(checks, "warn", "inventory", f"{len(units)} indoor unit(s), filter flag on {len(filter_flags)}", filter_flags)
+    else:
+        _add_check(checks, "pass", "inventory", f"{len(units)} indoor unit(s), no failures")
+
+    line_alerts = _line_health_alerts(lines)
+    used_lines = [line for line in lines if not line.description.startswith("Unused")]
+    if not used_lines:
+        _add_check(checks, "fail", "line_health", "No active HVAC line found")
+    elif line_alerts:
+        _add_check(checks, "warn", "line_health", f"{len(line_alerts)} line counter alert(s)", line_alerts)
+    else:
+        _add_check(checks, "pass", "line_health", f"{len(used_lines)} active line(s), no current TO/CS/NAK counters")
+
+    uid_set = {unit.uid for unit in units}
+    va_uid_set = {address.uid for address in addresses}
+    missing_va = sorted(uid_set - va_uid_set)
+    if not addresses:
+        _add_check(checks, "fail", "va_map", "No virtual-address map returned")
+    elif missing_va:
+        _add_check(checks, "warn", "va_map", f"{len(missing_va)} unit(s) missing VA mappings", missing_va)
+    else:
+        _add_check(checks, "pass", "va_map", f"{len(addresses)} VA mapping(s)")
+
+    modbus_enabled = modbus_settings.get("ModBus IP", "").lower() == "enabled"
+    if modbus_enabled:
+        _add_check(checks, "pass", "modbus_config", f"Modbus/IP enabled on port {modbus_settings.get('server port', modbus_port)}")
+    else:
+        _add_check(checks, "warn", "modbus_config", "Modbus/IP is not enabled in CoolMaster settings", modbus_settings)
+
+    modbus_probe = _probe_modbus(host, modbus_port, unit_id, timeout, addresses, enabled=modbus_enabled, deep=deep)
+    _add_check(checks, modbus_probe["status"], "modbus_tcp", modbus_probe["message"], modbus_probe["details"])
+
+    units_json = [asdict(unit) for unit in units]
+    lines_json = [asdict(line) for line in lines]
+    va_json = [asdict(address) for address in addresses]
+    report = {
+        "host": host,
+        "ascii_port": ascii_port,
+        "modbus_port": modbus_port,
+        "unit_id": unit_id,
+        "deep": deep,
+        "checked_at": time.time(),
+        "device": {
+            "serial": settings.get("S/N"),
+            "version": settings.get("version"),
+            "build_date": settings.get("build date"),
+            "application": settings.get("application"),
+            "melody": settings.get("melody"),
+        },
+        "settings": {
+            "modbus": modbus_settings,
+        },
+        "units": units_json,
+        "lines": lines_json,
+        "virtual_addresses": va_json,
+        "checks": checks,
+    }
+    report["summary"] = _doctor_summary(checks)
+    return report
+
+
+def _probe_modbus(
+    host: str,
+    port: int,
+    unit_id: int,
+    timeout: float,
+    addresses: list[VirtualAddress],
+    *,
+    enabled: bool,
+    deep: bool,
+) -> dict[str, object]:
+    if not enabled:
+        return {"status": "skip", "message": "Skipped because Modbus/IP is disabled", "details": {}}
+    if not addresses:
+        return {"status": "skip", "message": "Skipped because VA map is empty", "details": {}}
+
+    client = ModbusTcpClient(host, port, unit_id, timeout=timeout)
+    targets = addresses if deep else addresses[:1]
+    probes: list[dict[str, object]] = []
+    for target in targets:
+        try:
+            block = client.read_indoor_block(target.uid, target.va)
+            input_uid = block.input_registers.get(0)
+            holding_mode = block.holding_registers.get(0)
+            errors = _block_error_count(block)
+            ok = input_uid is not None and input_uid.error is None and holding_mode is not None and holding_mode.error is None
+            probes.append(
+                {
+                    "uid": target.uid,
+                    "va": target.va,
+                    "document_base": target.base_dec,
+                    "ok": ok,
+                    "object_errors": errors,
+                }
+            )
+        except Exception as exc:
+            probes.append(
+                {
+                    "uid": target.uid,
+                    "va": target.va,
+                    "document_base": target.base_dec,
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+
+    failed = [probe for probe in probes if not probe["ok"]]
+    if failed:
+        return {"status": "fail", "message": f"Modbus read failed for {len(failed)} target(s)", "details": probes}
+    scope = "all mapped indoor blocks" if deep else f"{targets[0].uid} indoor block"
+    return {"status": "pass", "message": f"Read {scope} on {host}:{port}", "details": probes}
+
+
+def _block_error_count(block: object) -> int:
+    count = 0
+    for values in (
+        getattr(block, "holding_registers", {}),
+        getattr(block, "input_registers", {}),
+        getattr(block, "coils", {}),
+        getattr(block, "discrete_inputs", {}),
+    ):
+        count += sum(1 for value in values.values() if value.error is not None)
+    return count
+
+
+def _line_health_alerts(lines: list[object]) -> list[dict[str, object]]:
+    alerts: list[dict[str, object]] = []
+    for line in lines:
+        if getattr(line, "description", "").startswith("Unused"):
+            continue
+        for counter in ("TO", "CS", "NAK"):
+            current, total = line.counters.get(counter, (0, 0))
+            if current:
+                alerts.append({"line": line.line, "counter": counter, "current": current, "total": total})
+    return alerts
+
+
+def _add_check(
+    checks: list[dict[str, object]],
+    status: str,
+    name: str,
+    message: str,
+    details: object | None = None,
+) -> None:
+    item: dict[str, object] = {"name": name, "status": status, "message": message}
+    if details not in (None, {}, []):
+        item["details"] = details
+    checks.append(item)
+
+
+def _doctor_summary(checks: list[dict[str, object]]) -> dict[str, object]:
+    counts = Counter(str(check["status"]) for check in checks)
+    if counts["fail"]:
+        status = "fail"
+    elif counts["warn"]:
+        status = "warn"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "pass": counts["pass"],
+        "warn": counts["warn"],
+        "fail": counts["fail"],
+        "skip": counts["skip"],
+    }
+
+
+def _print_doctor_report(report: dict[str, object]) -> None:
+    summary = report["summary"]
+    print(f"CoolMaster doctor: {summary['status'].upper()}")
+    print(f"target: {report['host']} ascii={report['ascii_port']} modbus={report['modbus_port']}")
+    device = report.get("device", {})
+    if isinstance(device, dict) and device.get("version"):
+        print(f"device: {device.get('version')} {device.get('application', '')}".rstrip())
+    print()
+    for check in report["checks"]:
+        print(f"{str(check['status']).upper():>4} {check['name']}: {check['message']}")
+    print()
+    print(
+        "summary: "
+        f"{summary['pass']} pass, {summary['warn']} warn, {summary['fail']} fail, {summary['skip']} skip"
+    )
+
+
+def _parse_key_values(response: object) -> dict[str, str]:
+    if not isinstance(response, str):
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in response.splitlines():
+        line = raw_line.strip(">\r\n ")
+        if not line or line == "OK" or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _record_response(record: dict[str, object]) -> str:
+    response = record.get("response", "")
+    return response if isinstance(response, str) else ""
+
+
+def _record_error(record: dict[str, object]) -> object | None:
+    if record.get("ok"):
+        return None
+    return record.get("error") or _record_response(record)
+
+
 def _load_names(path: Path | None) -> dict[str, str]:
     if path is None:
         return {}
@@ -641,6 +929,44 @@ def _line_deltas(
             for name, (_window, total) in counters.items()
         }
     return deltas
+
+
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key:
+            os.environ.setdefault(key, value)
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
 
 
 def _parse_bool(value: str) -> bool:

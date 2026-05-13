@@ -33,6 +33,13 @@ For shell examples, load your local target first:
 source .env
 ```
 
+Run a read-only health check:
+
+```bash
+uv run coolmaster-cli doctor
+uv run coolmaster-cli doctor --deep --out captures/doctor.json
+```
+
 ## First Capture Session
 
 1. Find the CoolMaster ASCII endpoint:
