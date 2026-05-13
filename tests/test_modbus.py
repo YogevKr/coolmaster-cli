@@ -1,4 +1,4 @@
-from coolrev.modbus import (
+from coolmaster_cli.modbus import (
     IndoorBlock,
     RegisterValue,
     decode_indoor_block,
@@ -8,8 +8,8 @@ from coolrev.modbus import (
     indoor_wire_base,
     wire_address,
 )
-from coolrev.cli import _build_modbus_address_map, _build_write_plan, _encode_temperature_limits
-from coolrev.coolmaster import VirtualAddress
+from coolmaster_cli.cli import _build_modbus_address_map, _build_write_plan, _encode_temperature_limits
+from coolmaster_cli.coolmaster import VirtualAddress
 
 
 def test_indoor_modbus_addresses() -> None:

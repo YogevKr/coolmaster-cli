@@ -1,4 +1,4 @@
-from coolrev.protocols import decode_stream, xor_checksum
+from coolmaster_cli.protocols import decode_stream, xor_checksum
 
 
 def test_decode_legacy_14_byte_frame() -> None:

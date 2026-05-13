@@ -53,7 +53,7 @@ TEMPERATURE_LIMIT_FIELDS = {"temperature_limits", "cool_temperature_limits", "he
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="coolrev")
+    parser = argparse.ArgumentParser(prog="coolmaster-cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     capture_parser = subparsers.add_parser("capture", help="capture raw traffic")

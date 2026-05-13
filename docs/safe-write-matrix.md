@@ -16,7 +16,7 @@ wire_address = document_address - 1
 Use the tool to generate the exact current map:
 
 ```bash
-uv run coolrev modbus map --host "$COOLMASTER_HOST" --all --out captures/modbus-map-current.json
+uv run coolmaster-cli modbus map --host "$COOLMASTER_HOST" --all --out captures/modbus-map-current.json
 ```
 
 ## Holding Registers
@@ -24,8 +24,8 @@ uv run coolrev modbus map --host "$COOLMASTER_HOST" --all --out captures/modbus-
 These use Modbus function `0x06` through:
 
 ```bash
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field FIELD --value VALUE
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field FIELD --value VALUE --yes
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field FIELD --value VALUE
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field FIELD --value VALUE --yes
 ```
 
 The first command is a dry-run. Add `--yes` only after checking the target UID and wire address.
@@ -46,7 +46,7 @@ The first command is a dry-run. Add `--yes` only after checking the target UID a
 Example:
 
 ```bash
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field cool_temperature_limits --value 16:32
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field cool_temperature_limits --value 16:32
 ```
 
 ## Coils
@@ -64,12 +64,12 @@ These use Modbus function `0x05`.
 Dedicated buzzer command:
 
 ```bash
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --all --set on
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --all --set on
 ```
 
 ## Read-Only Coverage
 
-`uv run coolrev modbus indoor --host "$COOLMASTER_HOST" --all` reads:
+`uv run coolmaster-cli modbus indoor --host "$COOLMASTER_HOST" --all` reads:
 
 - Holding registers `+0..+15`
 - Input registers `+0..+15`

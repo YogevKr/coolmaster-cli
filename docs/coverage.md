@@ -5,19 +5,19 @@
 | Area | Command | Status |
 | --- | --- | --- |
 | CoolMaster ASCII raw | `printf 'ls\r\n' \| nc "$COOLMASTER_HOST" 10102` | Confirmed |
-| CoolMaster firmware/settings | `coolrev coolmaster send --cmd set` | Confirmed |
+| CoolMaster firmware/settings | `coolmaster-cli coolmaster send --cmd set` | Confirmed |
 | Unit status | `ls`, `ls2`, `stat2`, `stat3`, `stat4` | Confirmed |
 | Per-unit raw query | `query <UID> o/m/f/t/e/a/h` | Confirmed |
 | Lock status | `lock <UID>` | Confirmed |
 | VA mapping | `va` | Confirmed |
 | Modbus/IP | TCP `502` | Confirmed enabled after firmware upgrade |
 | Indoor buzzer disable | Modbus coil `base+4` write ON | Confirmed acoustically |
-| Full indoor block read | `coolrev modbus indoor` | Implemented |
-| Full write address map | `coolrev modbus map` | Implemented |
-| Capability audit | `coolrev coolmaster capabilities` | Implemented |
-| Capability diff | `coolrev coolmaster diff-capabilities` | Implemented |
-| Inventory | `coolrev coolmaster inventory` | Implemented |
-| Monitor | `coolrev coolmaster monitor` | Implemented |
+| Full indoor block read | `coolmaster-cli modbus indoor` | Implemented |
+| Full write address map | `coolmaster-cli modbus map` | Implemented |
+| Capability audit | `coolmaster-cli coolmaster capabilities` | Implemented |
+| Capability diff | `coolmaster-cli coolmaster diff-capabilities` | Implemented |
+| Inventory | `coolmaster-cli coolmaster inventory` | Implemented |
+| Monitor | `coolmaster-cli coolmaster monitor` | Implemented |
 
 ## Modbus Indoor Block
 
@@ -56,13 +56,13 @@ Useful fields:
 
 ## Guardrails
 
-- `coolrev modbus write` is dry-run unless `--yes` is present.
-- `coolrev modbus buzzer --set on/off` writes immediately because it is a dedicated wrapper.
+- `coolmaster-cli modbus write` is dry-run unless `--yes` is present.
+- `coolmaster-cli modbus buzzer --set on/off` writes immediately because it is a dedicated wrapper.
 - Use `--uid` or `--all` when possible. Raw `--va` exists for debugging.
 - Buzzer readback is expected to return Modbus exception 2; acoustic validation is the source of truth.
 - Temperature limit writes accept raw integer/hex or `LOW:HIGH` Celsius. Example `16:32` encodes to `0x4020`.
 
-## Samsung Bus Reverse Targets
+## Samsung Bus Mapping Targets
 
 Capture raw Samsung bus while toggling:
 

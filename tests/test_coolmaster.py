@@ -1,4 +1,4 @@
-from coolrev.coolmaster import build_status_summary, parse_line_response, parse_ls_line, parse_ls_response, parse_va_response
+from coolmaster_cli.coolmaster import build_status_summary, parse_line_response, parse_ls_line, parse_ls_response, parse_va_response
 
 
 def test_parse_ls_line() -> None:

@@ -1,6 +1,6 @@
-# coolmaster-reverse
+# coolmaster-cli
 
-Open-source toolkit for inspecting and reverse-engineering CoolMaster gateways connected to Samsung VRF systems.
+Open-source command-line toolkit for inspecting and controlling CoolMaster gateways connected to Samsung VRF systems.
 
 The useful split:
 
@@ -24,7 +24,7 @@ cp .env.example .env
 Run without install:
 
 ```bash
-uv run coolrev --help
+uv run coolmaster-cli --help
 ```
 
 For shell examples, load your local target first:
@@ -39,7 +39,7 @@ source .env
 
 ```bash
 export COOLMASTER_HOST=192.0.2.10
-uv run coolrev coolmaster probe --host "$COOLMASTER_HOST" --port 10102 --out captures/coolmaster-probe.jsonl
+uv run coolmaster-cli coolmaster probe --host "$COOLMASTER_HOST" --port 10102 --out captures/coolmaster-probe.jsonl
 ```
 
 If port `10102` does not answer, try the configured ASCII/TCP port from the CoolMaster UI or use the serial terminal.
@@ -47,7 +47,7 @@ If port `10102` does not answer, try the configured ASCII/TCP port from the Cool
 2. Passively capture the Samsung-side bus:
 
 ```bash
-uv run coolrev capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity none --stopbits 1 --out captures/samsung-bus.jsonl
+uv run coolmaster-cli capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity none --stopbits 1 --out captures/samsung-bus.jsonl
 ```
 
 Samsung VRF adapters often use different baud/parity settings by generation and line type. If the decode looks random, repeat with the actual line settings from the gateway/adapter docs.
@@ -55,13 +55,13 @@ Samsung VRF adapters often use different baud/parity settings by generation and 
 3. Decode:
 
 ```bash
-uv run coolrev decode captures/samsung-bus.jsonl --protocol auto --out captures/samsung-bus.decoded.jsonl
+uv run coolmaster-cli decode captures/samsung-bus.jsonl --protocol auto --out captures/samsung-bus.decoded.jsonl
 ```
 
 4. Correlate by time:
 
 ```bash
-uv run coolrev summarize captures/samsung-bus.decoded.jsonl
+uv run coolmaster-cli summarize captures/samsung-bus.decoded.jsonl
 ```
 
 ## Common Commands
@@ -83,20 +83,20 @@ wire coil address = document coil - 1
 Mute Samsung indoor-unit buzzer for one unit:
 
 ```bash
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --uid L7.007 --set on
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --uid L7.007 --set on
 ```
 
 Mute every unit in the current VA map:
 
 ```bash
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --all --set on
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --all --set on --out captures/buzzer-disable-current.json
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --all --set on
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --all --set on --out captures/buzzer-disable-current.json
 ```
 
 Undo for one unit:
 
 ```bash
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --uid L7.007 --set off
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --uid L7.007 --set off
 ```
 
 The buzzer coil accepts writes but returns Modbus illegal-address on read, so validation is acoustic: turn a unit on/off and listen.
@@ -104,59 +104,59 @@ The buzzer coil accepts writes but returns Modbus illegal-address on read, so va
 Audit all currently exposed CoolMaster surfaces:
 
 ```bash
-uv run coolrev coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities.json
+uv run coolmaster-cli coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities.json
 ```
 
 Create a UID/VA/status inventory:
 
 ```bash
-uv run coolrev coolmaster inventory --host "$COOLMASTER_HOST" --out captures/inventory.json
-uv run coolrev coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-named.json
+uv run coolmaster-cli coolmaster inventory --host "$COOLMASTER_HOST" --out captures/inventory.json
+uv run coolmaster-cli coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-named.json
 ```
 
 Read and decode one complete indoor Modbus block:
 
 ```bash
-uv run coolrev modbus indoor --host "$COOLMASTER_HOST" --uid L7.007
+uv run coolmaster-cli modbus indoor --host "$COOLMASTER_HOST" --uid L7.007
 ```
 
 Read every mapped indoor Modbus block:
 
 ```bash
-uv run coolrev modbus indoor --host "$COOLMASTER_HOST" --all --out captures/modbus-indoor.json
+uv run coolmaster-cli modbus indoor --host "$COOLMASTER_HOST" --all --out captures/modbus-indoor.json
 ```
 
 Export the complete writable address map:
 
 ```bash
-uv run coolrev modbus map --host "$COOLMASTER_HOST" --all --out captures/modbus-map.json
+uv run coolmaster-cli modbus map --host "$COOLMASTER_HOST" --all --out captures/modbus-map.json
 ```
 
 Dry-run a named Modbus write:
 
 ```bash
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field set_temperature_c --value 22
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field set_temperature_c --value 22
 ```
 
 Execute a named Modbus write:
 
 ```bash
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field set_temperature_c --value 22 --yes
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field set_temperature_c --value 22 --yes
 ```
 
 Set a cool-mode temperature limit:
 
 ```bash
-uv run coolrev modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field cool_temperature_limits --value 16:32
+uv run coolmaster-cli modbus write --host "$COOLMASTER_HOST" --uid L7.007 --field cool_temperature_limits --value 16:32
 ```
 
 Monitor line health and unit status:
 
 ```bash
-uv run coolrev coolmaster monitor --host "$COOLMASTER_HOST" --interval 10 --samples 6
+uv run coolmaster-cli coolmaster monitor --host "$COOLMASTER_HOST" --interval 10 --samples 6
 ```
 
-## Reverse Plan
+## Protocol Mapping Plan
 
 1. Baseline idle traffic for 10-15 minutes.
 2. Run CoolMaster read commands and mark the exact timestamps.
@@ -173,8 +173,8 @@ uv run coolrev coolmaster monitor --host "$COOLMASTER_HOST" --interval 10 --samp
 - `docs/safe-write-matrix.md`: all guarded write fields and address math.
 - `docs/persistence-checklist.md`: reboot/power persistence validation.
 - `docs/samsung-bus-capture.md`: passive Samsung bus capture workflow.
-- `src/coolrev/protocols.py`: Samsung frame decoders.
-- `src/coolrev/coolmaster.py`: CoolMaster ASCII client and parsers.
+- `src/coolmaster_cli/protocols.py`: Samsung frame decoders.
+- `src/coolmaster_cli/coolmaster.py`: CoolMaster ASCII client and parsers.
 
 ## License
 

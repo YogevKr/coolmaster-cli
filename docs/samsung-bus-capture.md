@@ -24,14 +24,14 @@ So the repo is ready for capture, but the bus capture cannot start until an isol
 ## Capture
 
 ```bash
-uv run coolrev capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity none --stopbits 1 --out captures/samsung-bus.jsonl
+uv run coolmaster-cli capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity none --stopbits 1 --out captures/samsung-bus.jsonl
 ```
 
 Try these if frames do not decode:
 
 ```bash
-uv run coolrev capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity even --stopbits 1 --out captures/samsung-bus-9600-8e1.jsonl
-uv run coolrev capture serial /dev/tty.usbserial-XXXX --baud 19200 --parity none --stopbits 1 --out captures/samsung-bus-19200-8n1.jsonl
+uv run coolmaster-cli capture serial /dev/tty.usbserial-XXXX --baud 9600 --parity even --stopbits 1 --out captures/samsung-bus-9600-8e1.jsonl
+uv run coolmaster-cli capture serial /dev/tty.usbserial-XXXX --baud 19200 --parity none --stopbits 1 --out captures/samsung-bus-19200-8n1.jsonl
 ```
 
 ## Correlation Sequence
@@ -53,8 +53,8 @@ For each action, note the exact wall-clock time and run only one change at a tim
 ## Decode
 
 ```bash
-uv run coolrev decode captures/samsung-bus.jsonl --protocol auto --out captures/samsung-bus.decoded.jsonl
-uv run coolrev summarize captures/samsung-bus.decoded.jsonl
+uv run coolmaster-cli decode captures/samsung-bus.jsonl --protocol auto --out captures/samsung-bus.decoded.jsonl
+uv run coolmaster-cli summarize captures/samsung-bus.decoded.jsonl
 ```
 
 The decoder already recognizes Samsung NASA packet framing, common NASA message numbers, legacy 14-byte frames, checksums, source/destination classes, and key enum values for power/mode/fan/swing.

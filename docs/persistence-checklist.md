@@ -19,8 +19,8 @@ Not yet provable from software alone:
 Run after normal use, without rebooting anything:
 
 ```bash
-uv run coolrev coolmaster status --host "$COOLMASTER_HOST" --out captures/status-after-buzzer.json
-uv run coolrev modbus indoor --host "$COOLMASTER_HOST" --all --out captures/modbus-indoor-after-buzzer.json
+uv run coolmaster-cli coolmaster status --host "$COOLMASTER_HOST" --out captures/status-after-buzzer.json
+uv run coolmaster-cli modbus indoor --host "$COOLMASTER_HOST" --all --out captures/modbus-indoor-after-buzzer.json
 ```
 
 Then turn one unit off/on from its normal controller and listen. No beep means the write is still effective.
@@ -32,8 +32,8 @@ Use this only during a maintenance window:
 1. Save baseline:
 
 ```bash
-uv run coolrev coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-before-power-cycle.json
-uv run coolrev coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities-before-power-cycle.json
+uv run coolmaster-cli coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-before-power-cycle.json
+uv run coolmaster-cli coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities-before-power-cycle.json
 ```
 
 2. Power-cycle the gateway or the selected indoor unit.
@@ -42,13 +42,13 @@ uv run coolrev coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/
 5. Re-apply all buzzer-disable writes if any unit beeps:
 
 ```bash
-uv run coolrev modbus buzzer --host "$COOLMASTER_HOST" --all --set on
+uv run coolmaster-cli modbus buzzer --host "$COOLMASTER_HOST" --all --set on
 ```
 
 6. Save after snapshot:
 
 ```bash
-uv run coolrev coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-after-power-cycle.json
-uv run coolrev coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities-after-power-cycle.json
-uv run coolrev coolmaster diff-capabilities captures/capabilities-before-power-cycle.json captures/capabilities-after-power-cycle.json
+uv run coolmaster-cli coolmaster inventory --host "$COOLMASTER_HOST" --names docs/office-names.example.json --out captures/inventory-after-power-cycle.json
+uv run coolmaster-cli coolmaster capabilities --host "$COOLMASTER_HOST" --out captures/capabilities-after-power-cycle.json
+uv run coolmaster-cli coolmaster diff-capabilities captures/capabilities-before-power-cycle.json captures/capabilities-after-power-cycle.json
 ```
