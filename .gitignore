@@ -1,0 +1,12 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+dist/
+
+.env
+.env.*
+!.env.example
+docs/office-names.json
+captures/
+*.decoded.jsonl
